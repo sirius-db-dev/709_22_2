@@ -1,0 +1,77 @@
+create extension if not exists "uuid-ossp";
+drop table if exists recipe, ingredient, recipe_to_ingredient cascade;
+
+create table recipe(
+	id uuid primary key default uuid_generate_v4(),
+	recipe_name text,
+	description text,
+	category text
+);
+
+create table ingredient(
+	id uuid primary key default uuid_generate_v4(),
+	ingredient_name text,
+	category text, 
+	price int
+);
+
+create table recipe_to_ingredient(
+	recipe_id uuid references recipe,
+	ingredient_id uuid references ingredient,
+	primary key(recipe_id, ingredient_id)
+);
+
+insert into recipe(recipe_name, description, category) values
+	('r1', 'd1', 'c1'),
+	('r2', 'd2', 'c2'),
+	('r3', 'd3', 'c3');
+
+insert into ingredient(ingredient_name, category, price) values
+	('i1', 'c1', 1),
+	('i2', 'c2', 2),
+	('i3', 'c3', 3);
+
+insert into recipe_to_ingredient(recipe_id, ingredient_id) values
+	(
+		(select id from recipe where recipe_name = 'r1'),
+		(select id from ingredient where ingredient_name = 'i1')
+	),
+	(
+		(select id from recipe where recipe_name = 'r2'),
+		(select id from ingredient where ingredient_name = 'i1')
+	),
+	(
+		(select id from recipe where recipe_name = 'r3'),
+		(select id from ingredient where ingredient_name = 'i2')
+	),
+	(
+		(select id from recipe where recipe_name = 'r1'),
+		(select id from ingredient where ingredient_name = 'i3')
+	);
+
+select 
+	r.id,
+	r.recipe_name,
+	r.description,
+	r.category,
+	coalesce(jsonb_agg(jsonb_build_object(
+    'id', i.id, 'name', i.ingredient_name, 'category', i.category, 'price', i.price))
+      filter (where i.id is not null), '[]') as ingredient
+from recipe r
+left join recipe_to_ingredient rc on r.id = rc.recipe_id
+left join ingredient i on i.id = rc.ingredient_id
+group by r.id;
+
+select 
+	i.id,
+	i.ingredient_name,
+	i.category,
+	i.price,
+	coalesce(jsonb_agg(jsonb_build_object(
+    'id', r.id, 'name', r.recipe_name, 'description', r.description, 'category', r.category))
+      filter (where r.id is not null), '[]') as recipe
+from ingredient i
+left join recipe_to_ingredient rc on i.id = rc.ingredient_id
+left join recipe r on r.id = rc.recipe_id
+group by i.id;
+

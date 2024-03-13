@@ -1,0 +1,85 @@
+create extension if not exists "uuid-ossp";
+drop table if exists doctor, patient, doctor_to_patient cascade;
+
+create table doctor
+(
+	id uuid primary key default uuid_generate_v4(),
+	first_name text,
+	last_name text,
+	specialization text
+);
+
+create table patient
+(
+	id uuid primary key default uuid_generate_v4(),
+	first_name text,
+	last_name text,
+	birth_date date
+);
+
+create table doctor_to_patient
+(
+	doctor_id uuid references doctor,
+	patient_id uuid references patient,
+	primary key (doctor_id, patient_id)
+);
+
+insert into doctor(first_name, last_name, specialization) values
+	('df1', 'dl1', 'some1'),
+	('df2', 'dl2', 'some2'),
+	('df3', 'dl3', 'some3');
+	
+
+insert into patient(first_name, last_name, birth_date) values
+	('pf1', 'pl1', '2001.01.01'),
+	('pf2', 'pl2', '2002.02.02'),
+	('pf3', 'pl3', '2003.03.03');
+
+insert into doctor_to_patient(doctor_id, patient_id) values 
+	(
+		(select id from doctor where first_name = 'df1'),
+		(select id from patient where first_name = 'pf3')
+	),
+	(
+		(select id from doctor where first_name = 'df1'),
+		(select id from patient where first_name = 'pf2')
+	),
+	(
+		(select id from doctor where first_name = 'df1'),
+		(select id from patient where first_name = 'pf1')
+	),
+	(
+		(select id from doctor where first_name = 'df2'),
+		(select id from patient where first_name = 'pf2')
+	),
+	(
+		(select id from doctor where first_name = 'df3'),
+		(select id from patient where first_name = 'pf3')
+	);
+	
+select 
+	d.id,
+	d.first_name,
+	d.last_name,
+	d.specialization,
+	coalesce(jsonb_agg(jsonb_build_object(
+    'id', p.id, 'first_name', p.first_name, 'last_name', p.last_name, 'birth_date', p.birth_date))
+      filter (where p.id is not null), '[]') as patient
+from doctor d
+left join doctor_to_patient dp on d.id = dp.doctor_id
+left join patient p on p.id = dp.patient_id
+group by d.id;
+
+select 
+	p.id,
+	p.first_name,
+	p.last_name,
+	p.birth_date,
+	coalesce(jsonb_agg(jsonb_build_object(
+    'id', d.id, 'first_name', d.first_name, 'last_name', d.last_name, 'specialization', d.specialization))
+      filter (where d.id is not null), '[]') as doctor
+from patient p
+left join doctor_to_patient dp on p.id = dp.patient_id
+left join doctor d on d.id = dp.doctor_id
+group by p.id;
+

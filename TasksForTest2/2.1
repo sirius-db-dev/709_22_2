@@ -1,0 +1,85 @@
+create extension if not exists "uuid-ossp";
+drop table if exists game, customer, game_to_customer cascade;
+
+create table game
+(
+	id uuid primary key default uuid_generate_v4(),
+	game_name text,
+	genre text,
+	price int
+);
+
+create table customer
+(
+	id uuid primary key default uuid_generate_v4(),
+	nickname text,
+	registration_date date
+);
+
+create table game_to_customer
+(
+	game_id uuid references game,
+	customer_id uuid references customer,
+	primary key (game_id, customer_id)
+);
+
+insert into game(game_name, genre, price) values
+	('game1', 'horror', 1200),
+	('game2', 'RPG', 800),
+	('game3', 'rogalic', 300);
+
+insert into customer(nickname, registration_date) values
+	('nagibator228', '2007.07.07'),
+	('A', '2005.05.05'),
+	('B', '2003.03.03');
+
+insert into game_to_customer(customer_id, game_id) values 
+	(
+		(select id from customer where nickname = 'nagibator228'),
+		(select id from game where game_name = 'game1')
+	),
+	(
+		(select id from customer where nickname = 'A'),
+		(select id from game where game_name = 'game1')
+	),
+	(
+		(select id from customer where nickname = 'A'),
+		(select id from game where game_name = 'game2')
+	),
+	(
+		(select id from customer where nickname = 'B'),
+		(select id from game where game_name = 'game2')
+	),
+	(
+		(select id from customer where nickname = 'B'),
+		(select id from game where game_name = 'game3')
+	);
+
+select 
+	g.id,
+	g.game_name,
+	g.genre,
+	g.price,
+	coalesce(jsonb_agg(jsonb_build_object(
+    'id', c.id, 'nickname', c.nickname, 'registration_date', c.registration_date))
+      filter (where c.id is not null), '[]') as customer
+from game g
+left join game_to_customer gc on g.id = gc.game_id
+left join customer c on c.id = gc.customer_id
+group by g.id;
+
+select 
+	c.id,
+	c.nickname,
+	c.registration_date,
+	coalesce(jsonb_agg(jsonb_build_object(
+	'id', g.id, 'game_name', g.game_name, 'genre', g.genre, 'price', g.price
+    ))
+      filter (where g.id is not null), '[]') as customer
+from customer c
+left join game_to_customer gc on c.id = gc.customer_id
+left join game g on g.id = gc.game_id
+group by c.id;
+	
+	
+	
